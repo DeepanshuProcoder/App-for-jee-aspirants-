@@ -1,0 +1,549 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable Hardened Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidSubject(s) {
+      return s in ['PHYSICS', 'CHEMISTRY', 'MATHEMATICS'];
+    }
+
+    function isValidStatus(st) {
+      return st in [
+        'NOT_STARTED',
+        'CURRENTLY_STUDYING',
+        'THEORY_COMPLETED',
+        'PRACTICE_IN_PROGRESS',
+        'REVISION_IN_PROGRESS',
+        'STRONG',
+        'NEEDS_ATTENTION'
+      ];
+    }
+
+    function isValidOutcome(o) {
+      return o in ['EASY', 'GOOD', 'DIFFICULT', 'FORGOT'];
+    }
+
+    // 1. User Profile & Preferences (PII isolated to owner)
+    function isValidUserProfile(data, userId) {
+      return data.userId == userId &&
+             data.displayName is string && data.displayName.size() <= 120 &&
+             (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 200)) &&
+             data.classLevel in ['CLASS_11', 'CLASS_12'] &&
+             data.syllabusVersion is string && data.syllabusVersion.size() >= 1 && data.syllabusVersion.size() <= 40 &&
+             data.defaultIntervals is list && data.defaultIntervals.size() >= 1 && data.defaultIntervals.size() <= 12 &&
+             data.defaultIntervals[0] is int &&
+             data.dailyRevisionCapacity is int && data.dailyRevisionCapacity >= 1 && data.dailyRevisionCapacity <= 30 &&
+             data.preferredStudyTime is string && data.preferredStudyTime.size() <= 16 &&
+             data.darkModePreference in ['SYSTEM', 'DARK', 'LIGHT'] &&
+             data.notificationsEnabled is bool &&
+             data.notifyTodayQueue is bool &&
+             data.notifyOverdue is bool &&
+             data.notifyTests is bool &&
+             data.notifyWeakTopics is bool &&
+             data.notifyWeeklyReport is bool &&
+             (!('lastNotifiedDate' in data) || data.lastNotifiedDate == null || (data.lastNotifiedDate is string && data.lastNotifiedDate.size() <= 32)) &&
+             data.blockedDates is list && data.blockedDates.size() <= 120 &&
+             (data.blockedDates.size() == 0 || data.blockedDates[0] is string) &&
+             data.seededInitialCatalog is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /users/{userId} {
+      allow get, list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'displayName', 'classLevel', 'syllabusVersion',
+                         'defaultIntervals', 'dailyRevisionCapacity', 'preferredStudyTime',
+                         'darkModePreference', 'notificationsEnabled', 'notifyTodayQueue',
+                         'notifyOverdue', 'notifyTests', 'notifyWeakTopics', 'notifyWeeklyReport',
+                         'blockedDates', 'seededInitialCatalog', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'displayName', 'email', 'classLevel', 'syllabusVersion',
+                         'defaultIntervals', 'dailyRevisionCapacity', 'preferredStudyTime',
+                         'darkModePreference', 'notificationsEnabled', 'notifyTodayQueue',
+                         'notifyOverdue', 'notifyTests', 'notifyWeakTopics', 'notifyWeeklyReport',
+                         'lastNotifiedDate', 'blockedDates', 'seededInitialCatalog', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'displayName', 'email', 'classLevel', 'syllabusVersion',
+                         'defaultIntervals', 'dailyRevisionCapacity', 'preferredStudyTime',
+                         'darkModePreference', 'notificationsEnabled', 'notifyTodayQueue',
+                         'notifyOverdue', 'notifyTests', 'notifyWeakTopics', 'notifyWeeklyReport',
+                         'lastNotifiedDate', 'blockedDates', 'seededInitialCatalog', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId);
+
+      // 2. Chapters Subcollection
+      function isValidChapter(data) {
+        return data.userId == userId &&
+               data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+               isValidSubject(data.subject) &&
+               data.section in ['', 'PHYSICAL', 'INORGANIC', 'ORGANIC'] &&
+               data.classLevel in ['CLASS_11', 'CLASS_12'] &&
+               data.orderIndex is int && data.orderIndex >= 0 && data.orderIndex <= 5000 &&
+               data.isArchived is bool &&
+               data.syllabusVersion is string && data.syllabusVersion.size() <= 40 &&
+               isValidStatus(data.status) &&
+               data.initialLearningDate is string && data.initialLearningDate.size() <= 32 &&
+               data.completedRevisions is int && data.completedRevisions >= 0 &&
+               data.lastRevisionDate is string && data.lastRevisionDate.size() <= 32 &&
+               data.nextRevisionDate is string && data.nextRevisionDate.size() <= 32 &&
+               data.originalDueDate is string && data.originalDueDate.size() <= 32 &&
+               data.currentIntervalDays is int && data.currentIntervalDays >= 0 && data.currentIntervalDays <= 3650 &&
+               data.consecutiveSuccesses is int && data.consecutiveSuccesses >= 0 &&
+               data.understandingRating is number && data.understandingRating >= 0 && data.understandingRating <= 5 &&
+               data.problemSolvingRating is number && data.problemSolvingRating >= 0 && data.problemSolvingRating <= 5 &&
+               data.confidenceRating is number && data.confidenceRating >= 0 && data.confidenceRating <= 5 &&
+               data.difficultyRating is number && data.difficultyRating >= 0 && data.difficultyRating <= 5 &&
+               data.totalQuestions is int && data.totalQuestions >= 0 &&
+               data.correctQuestions is int && data.correctQuestions >= 0 &&
+               data.incorrectQuestions is int && data.incorrectQuestions >= 0 &&
+               data.unsolvedQuestions is int && data.unsolvedQuestions >= 0 &&
+               data.estimatedRetention is number && data.estimatedRetention >= 0 && data.estimatedRetention <= 100 &&
+               data.importance is int && data.importance >= 1 && data.importance <= 5 &&
+               data.lastRescheduleReason is string && data.lastRescheduleReason.size() <= 500 &&
+               data.personalNotes is string && data.personalNotes.size() <= 4000 &&
+               data.importantFormulas is string && data.importantFormulas.size() <= 4000 &&
+               data.commonMistakes is string && data.commonMistakes.size() <= 4000 &&
+               data.difficultQuestions is string && data.difficultQuestions.size() <= 4000 &&
+               data.skipReason is string && data.skipReason.size() <= 300 &&
+               data.skippedUntilDate is string && data.skippedUntilDate.size() <= 32 &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /chapters/{chapterId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(chapterId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(chapterId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'name', 'subject', 'section', 'classLevel', 'orderIndex',
+                           'isArchived', 'syllabusVersion', 'status', 'initialLearningDate',
+                           'completedRevisions', 'lastRevisionDate', 'nextRevisionDate',
+                           'originalDueDate', 'currentIntervalDays', 'consecutiveSuccesses',
+                           'understandingRating', 'problemSolvingRating', 'confidenceRating',
+                           'difficultyRating', 'totalQuestions', 'correctQuestions',
+                           'incorrectQuestions', 'unsolvedQuestions', 'estimatedRetention',
+                           'importance', 'lastRescheduleReason', 'personalNotes',
+                           'importantFormulas', 'commonMistakes', 'difficultQuestions',
+                           'skipReason', 'skippedUntilDate', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'name', 'subject', 'section', 'classLevel', 'orderIndex',
+                           'isArchived', 'syllabusVersion', 'status', 'initialLearningDate',
+                           'completedRevisions', 'lastRevisionDate', 'nextRevisionDate',
+                           'originalDueDate', 'currentIntervalDays', 'consecutiveSuccesses',
+                           'understandingRating', 'problemSolvingRating', 'confidenceRating',
+                           'difficultyRating', 'totalQuestions', 'correctQuestions',
+                           'incorrectQuestions', 'unsolvedQuestions', 'estimatedRetention',
+                           'importance', 'lastRescheduleReason', 'personalNotes',
+                           'importantFormulas', 'commonMistakes', 'difficultQuestions',
+                           'skipReason', 'skippedUntilDate', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidChapter(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(chapterId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidChapter(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'name', 'subject', 'section', 'classLevel', 'orderIndex',
+                           'isArchived', 'syllabusVersion', 'status', 'initialLearningDate',
+                           'completedRevisions', 'lastRevisionDate', 'nextRevisionDate',
+                           'originalDueDate', 'currentIntervalDays', 'consecutiveSuccesses',
+                           'understandingRating', 'problemSolvingRating', 'confidenceRating',
+                           'difficultyRating', 'totalQuestions', 'correctQuestions',
+                           'incorrectQuestions', 'unsolvedQuestions', 'estimatedRetention',
+                           'importance', 'lastRescheduleReason', 'personalNotes',
+                           'importantFormulas', 'commonMistakes', 'difficultQuestions',
+                           'skipReason', 'skippedUntilDate', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(chapterId);
+      }
+
+      // 3. Topics Subcollection
+      function isValidTopic(data) {
+        return data.userId == userId &&
+               isValidId(data.chapterId) &&
+               isValidSubject(data.subject) &&
+               data.name is string && data.name.size() >= 1 && data.name.size() <= 150 &&
+               data.orderIndex is int && data.orderIndex >= 0 && data.orderIndex <= 5000 &&
+               data.isArchived is bool &&
+               isValidStatus(data.status) &&
+               data.initialLearningDate is string && data.initialLearningDate.size() <= 32 &&
+               data.completedRevisions is int && data.completedRevisions >= 0 &&
+               data.lastRevisionDate is string && data.lastRevisionDate.size() <= 32 &&
+               data.nextRevisionDate is string && data.nextRevisionDate.size() <= 32 &&
+               data.originalDueDate is string && data.originalDueDate.size() <= 32 &&
+               data.currentIntervalDays is int && data.currentIntervalDays >= 0 && data.currentIntervalDays <= 3650 &&
+               data.consecutiveSuccesses is int && data.consecutiveSuccesses >= 0 &&
+               data.understandingRating is number && data.understandingRating >= 0 && data.understandingRating <= 5 &&
+               data.confidenceRating is number && data.confidenceRating >= 0 && data.confidenceRating <= 5 &&
+               data.difficultyRating is number && data.difficultyRating >= 0 && data.difficultyRating <= 5 &&
+               data.totalQuestions is int && data.totalQuestions >= 0 &&
+               data.correctQuestions is int && data.correctQuestions >= 0 &&
+               data.incorrectQuestions is int && data.incorrectQuestions >= 0 &&
+               data.unsolvedQuestions is int && data.unsolvedQuestions >= 0 &&
+               data.estimatedRetention is number && data.estimatedRetention >= 0 && data.estimatedRetention <= 100 &&
+               data.lastOutcome in ['', 'EASY', 'GOOD', 'DIFFICULT', 'FORGOT'] &&
+               data.lastRescheduleReason is string && data.lastRescheduleReason.size() <= 500 &&
+               data.notes is string && data.notes.size() <= 2000 &&
+               data.skipReason is string && data.skipReason.size() <= 300 &&
+               data.skippedUntilDate is string && data.skippedUntilDate.size() <= 32 &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /topics/{topicId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(topicId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(topicId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'chapterId', 'subject', 'name', 'orderIndex', 'isArchived',
+                           'status', 'initialLearningDate', 'completedRevisions', 'lastRevisionDate',
+                           'nextRevisionDate', 'originalDueDate', 'currentIntervalDays',
+                           'consecutiveSuccesses', 'understandingRating', 'confidenceRating',
+                           'difficultyRating', 'totalQuestions', 'correctQuestions',
+                           'incorrectQuestions', 'unsolvedQuestions', 'estimatedRetention',
+                           'lastOutcome', 'lastRescheduleReason', 'notes', 'skipReason',
+                           'skippedUntilDate', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'chapterId', 'subject', 'name', 'orderIndex', 'isArchived',
+                           'status', 'initialLearningDate', 'completedRevisions', 'lastRevisionDate',
+                           'nextRevisionDate', 'originalDueDate', 'currentIntervalDays',
+                           'consecutiveSuccesses', 'understandingRating', 'confidenceRating',
+                           'difficultyRating', 'totalQuestions', 'correctQuestions',
+                           'incorrectQuestions', 'unsolvedQuestions', 'estimatedRetention',
+                           'lastOutcome', 'lastRescheduleReason', 'notes', 'skipReason',
+                           'skippedUntilDate', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidTopic(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(topicId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTopic(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'chapterId', 'subject', 'name', 'orderIndex', 'isArchived',
+                           'status', 'initialLearningDate', 'completedRevisions', 'lastRevisionDate',
+                           'nextRevisionDate', 'originalDueDate', 'currentIntervalDays',
+                           'consecutiveSuccesses', 'understandingRating', 'confidenceRating',
+                           'difficultyRating', 'totalQuestions', 'correctQuestions',
+                           'incorrectQuestions', 'unsolvedQuestions', 'estimatedRetention',
+                           'lastOutcome', 'lastRescheduleReason', 'notes', 'skipReason',
+                           'skippedUntilDate', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(topicId);
+      }
+
+      // 4. Revision Sessions Subcollection (Append-Only History)
+      function isValidRevisionSession(data) {
+        return data.userId == userId &&
+               isValidId(data.chapterId) &&
+               data.chapterName is string && data.chapterName.size() >= 1 && data.chapterName.size() <= 120 &&
+               data.topicId is string && data.topicId.size() <= 128 &&
+               data.topicName is string && data.topicName.size() <= 150 &&
+               isValidSubject(data.subject) &&
+               data.sessionDate is string && data.sessionDate.size() >= 8 && data.sessionDate.size() <= 32 &&
+               data.durationMinutes is int && data.durationMinutes >= 0 && data.durationMinutes <= 600 &&
+               data.activeRecallNotes is string && data.activeRecallNotes.size() <= 3000 &&
+               data.theoryChecklist is string && data.theoryChecklist.size() <= 500 &&
+               data.questionsAttempted is int && data.questionsAttempted >= 0 &&
+               data.questionsCorrect is int && data.questionsCorrect >= 0 &&
+               data.questionsIncorrect is int && data.questionsIncorrect >= 0 &&
+               data.questionsWithHints is int && data.questionsWithHints >= 0 &&
+               data.questionsUnsolved is int && data.questionsUnsolved >= 0 &&
+               data.whatForgot is string && data.whatForgot.size() <= 1500 &&
+               data.unclearConcept is string && data.unclearConcept.size() <= 1500 &&
+               data.mistakeMade is string && data.mistakeMade.size() <= 1500 &&
+               data.needsPractice is string && data.needsPractice.size() <= 1500 &&
+               data.understandingRating is int && data.understandingRating >= 1 && data.understandingRating <= 5 &&
+               data.confidenceRating is int && data.confidenceRating >= 1 && data.confidenceRating <= 5 &&
+               data.difficultyRating is int && data.difficultyRating >= 1 && data.difficultyRating <= 5 &&
+               isValidOutcome(data.outcome) &&
+               data.previousIntervalDays is int && data.previousIntervalDays >= 0 &&
+               data.newIntervalDays is int && data.newIntervalDays >= 1 && data.newIntervalDays <= 3650 &&
+               data.nextRevisionDate is string && data.nextRevisionDate.size() >= 8 && data.nextRevisionDate.size() <= 32 &&
+               data.rescheduleExplanation is string && data.rescheduleExplanation.size() <= 800 &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /revision_sessions/{sessionId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(sessionId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(sessionId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'chapterId', 'chapterName', 'topicId', 'topicName', 'subject',
+                           'sessionDate', 'durationMinutes', 'activeRecallNotes', 'theoryChecklist',
+                           'questionsAttempted', 'questionsCorrect', 'questionsIncorrect',
+                           'questionsWithHints', 'questionsUnsolved', 'whatForgot', 'unclearConcept',
+                           'mistakeMade', 'needsPractice', 'understandingRating', 'confidenceRating',
+                           'difficultyRating', 'outcome', 'previousIntervalDays', 'newIntervalDays',
+                           'nextRevisionDate', 'rescheduleExplanation', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'chapterId', 'chapterName', 'topicId', 'topicName', 'subject',
+                           'sessionDate', 'durationMinutes', 'activeRecallNotes', 'theoryChecklist',
+                           'questionsAttempted', 'questionsCorrect', 'questionsIncorrect',
+                           'questionsWithHints', 'questionsUnsolved', 'whatForgot', 'unclearConcept',
+                           'mistakeMade', 'needsPractice', 'understandingRating', 'confidenceRating',
+                           'difficultyRating', 'outcome', 'previousIntervalDays', 'newIntervalDays',
+                           'nextRevisionDate', 'rescheduleExplanation', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidRevisionSession(incoming());
+
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(sessionId);
+      }
+
+      // 5. Calendar Events Subcollection
+      function isValidCalendarEvent(data) {
+        return data.userId == userId &&
+               data.title is string && data.title.size() >= 1 && data.title.size() <= 150 &&
+               data.eventType in ['ALLEN_TEST', 'STUDY_TARGET', 'CUSTOM_REVISION'] &&
+               data.subject in ['ALL', 'PHYSICS', 'CHEMISTRY', 'MATHEMATICS'] &&
+               data.date is string && data.date.size() >= 8 && data.date.size() <= 32 &&
+               data.timeSlot is string && data.timeSlot.size() <= 16 &&
+               data.chapterId is string && data.chapterId.size() <= 128 &&
+               data.notes is string && data.notes.size() <= 1000 &&
+               data.isCompleted is bool &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /calendar_events/{eventId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(eventId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(eventId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'title', 'eventType', 'subject', 'date', 'timeSlot',
+                           'chapterId', 'notes', 'isCompleted', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'title', 'eventType', 'subject', 'date', 'timeSlot',
+                           'chapterId', 'notes', 'isCompleted', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidCalendarEvent(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(eventId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidCalendarEvent(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'title', 'eventType', 'subject', 'date', 'timeSlot',
+                           'chapterId', 'notes', 'isCompleted', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(eventId);
+      }
+
+      // 6. Test Records Subcollection
+      function isValidTestRecord(data) {
+        return data.userId == userId &&
+               data.testName is string && data.testName.size() >= 1 && data.testName.size() <= 150 &&
+               data.testDate is string && data.testDate.size() >= 8 && data.testDate.size() <= 32 &&
+               data.testType in ['ALLEN_MINOR', 'ALLEN_MAJOR', 'JEE_MAIN_MOCK', 'JEE_ADV_MOCK', 'CHAPTER_TEST', 'CUSTOM'] &&
+               data.physicsScore is number &&
+               data.physicsMax is number && data.physicsMax >= 0 &&
+               data.chemistryScore is number &&
+               data.chemistryMax is number && data.chemistryMax >= 0 &&
+               data.mathsScore is number &&
+               data.mathsMax is number && data.mathsMax >= 0 &&
+               data.totalMarks is number &&
+               data.maxMarks is number && data.maxMarks >= 0 &&
+               data.accuracyPercent is number && data.accuracyPercent >= 0 && data.accuracyPercent <= 100 &&
+               data.timeManagementNotes is string && data.timeManagementNotes.size() <= 1500 &&
+               data.chapterResults is list && data.chapterResults.size() <= 40 &&
+               (data.chapterResults.size() == 0 || data.chapterResults[0] is map) &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /test_records/{testId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(testId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(testId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'testName', 'testDate', 'testType', 'physicsScore', 'physicsMax',
+                           'chemistryScore', 'chemistryMax', 'mathsScore', 'mathsMax', 'totalMarks',
+                           'maxMarks', 'accuracyPercent', 'timeManagementNotes', 'chapterResults',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'testName', 'testDate', 'testType', 'physicsScore', 'physicsMax',
+                           'chemistryScore', 'chemistryMax', 'mathsScore', 'mathsMax', 'totalMarks',
+                           'maxMarks', 'accuracyPercent', 'timeManagementNotes', 'chapterResults',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidTestRecord(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(testId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTestRecord(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'testName', 'testDate', 'testType', 'physicsScore', 'physicsMax',
+                           'chemistryScore', 'chemistryMax', 'mathsScore', 'mathsMax', 'totalMarks',
+                           'maxMarks', 'accuracyPercent', 'timeManagementNotes', 'chapterResults',
+                           'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(testId);
+      }
+
+      // 7. Error Notebook Subcollection
+      function isValidErrorRecord(data) {
+        return data.userId == userId &&
+               isValidSubject(data.subject) &&
+               data.chapterId is string && data.chapterId.size() <= 128 &&
+               data.chapterName is string && data.chapterName.size() >= 1 && data.chapterName.size() <= 120 &&
+               data.topicId is string && data.topicId.size() <= 128 &&
+               data.topicName is string && data.topicName.size() <= 150 &&
+               data.questionRef is string && data.questionRef.size() >= 1 && data.questionRef.size() <= 500 &&
+               data.errorCategory in ['CONCEPTUAL', 'APPLICATION', 'CALCULATION', 'QUESTION_READING', 'TIME_MANAGEMENT'] &&
+               data.mistakeExplanation is string && data.mistakeExplanation.size() <= 2000 &&
+               data.correctApproach is string && data.correctApproach.size() <= 2000 &&
+               data.importantLesson is string && data.importantLesson.size() <= 1000 &&
+               data.dateRecorded is string && data.dateRecorded.size() >= 8 && data.dateRecorded.size() <= 32 &&
+               data.reattemptStatus in ['PENDING', 'SCHEDULED', 'SOLVED_CORRECTLY', 'NEEDS_REVIEW'] &&
+               data.scheduledRevisionDate is string && data.scheduledRevisionDate.size() <= 32 &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /error_records/{errorId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(errorId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(errorId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'subject', 'chapterId', 'chapterName', 'topicId', 'topicName',
+                           'questionRef', 'errorCategory', 'mistakeExplanation', 'correctApproach',
+                           'importantLesson', 'dateRecorded', 'reattemptStatus', 'scheduledRevisionDate',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'subject', 'chapterId', 'chapterName', 'topicId', 'topicName',
+                           'questionRef', 'errorCategory', 'mistakeExplanation', 'correctApproach',
+                           'importantLesson', 'dateRecorded', 'reattemptStatus', 'scheduledRevisionDate',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidErrorRecord(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(errorId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidErrorRecord(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'subject', 'chapterId', 'chapterName', 'topicId', 'topicName',
+                           'questionRef', 'errorCategory', 'mistakeExplanation', 'correctApproach',
+                           'importantLesson', 'dateRecorded', 'reattemptStatus', 'scheduledRevisionDate',
+                           'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(errorId);
+      }
+
+      // 8. Formula Bank & Short Notes Subcollection
+      function isValidFormulaNote(data) {
+        return data.userId == userId &&
+               isValidSubject(data.subject) &&
+               data.chapterId is string && data.chapterId.size() <= 128 &&
+               data.chapterName is string && data.chapterName.size() >= 1 && data.chapterName.size() <= 120 &&
+               data.noteType in ['FORMULA', 'DERIVATION', 'REACTION', 'EXCEPTION', 'CONCEPT', 'TRICK', 'EXAMPLE'] &&
+               data.title is string && data.title.size() >= 1 && data.title.size() <= 150 &&
+               data.content is string && data.content.size() <= 4000 &&
+               data.latexFormula is string && data.latexFormula.size() <= 2000 &&
+               data.attachmentUri is string && data.attachmentUri.size() <= 1000 &&
+               data.createdAt is timestamp && data.createdAt <= request.time &&
+               data.updatedAt is timestamp && data.updatedAt <= request.time;
+      }
+
+      match /formula_notes/{noteId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(noteId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(noteId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'subject', 'chapterId', 'chapterName', 'noteType',
+                           'title', 'content', 'latexFormula', 'attachmentUri', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'subject', 'chapterId', 'chapterName', 'noteType',
+                           'title', 'content', 'latexFormula', 'attachmentUri', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidFormulaNote(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(noteId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidFormulaNote(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'subject', 'chapterId', 'chapterName', 'noteType',
+                           'title', 'content', 'latexFormula', 'attachmentUri', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(noteId);
+      }
+    }
+  }
+}

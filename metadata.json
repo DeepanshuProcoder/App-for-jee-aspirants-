@@ -1,0 +1,8 @@
+{
+  "name": "JEE Revision OS",
+  "description": "Intelligent spaced-repetition revision management system for Class 11 JEE Main and Advanced Physics, Chemistry, and Mathematics aspirants.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

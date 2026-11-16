@@ -1,0 +1,322 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "JEE aspirant profile, scheduling defaults, blocked dates, and notification preferences.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the owner." },
+        "displayName": { "type": "string", "description": "Student display name." },
+        "email": { "type": "string", "description": "Private Google account email." },
+        "classLevel": { "type": "string", "enum": ["CLASS_11", "CLASS_12"] },
+        "syllabusVersion": { "type": "string", "description": "Active syllabus version tag." },
+        "defaultIntervals": { "type": "array", "description": "Custom spaced repetition intervals in days." },
+        "dailyRevisionCapacity": { "type": "integer", "description": "Max revisions scheduled per day before load-balancing." },
+        "preferredStudyTime": { "type": "string", "description": "Preferred HH:mm reminder time in Asia/Kolkata." },
+        "darkModePreference": { "type": "string", "enum": ["SYSTEM", "DARK", "LIGHT"] },
+        "notificationsEnabled": { "type": "boolean" },
+        "notifyTodayQueue": { "type": "boolean" },
+        "notifyOverdue": { "type": "boolean" },
+        "notifyTests": { "type": "boolean" },
+        "notifyWeakTopics": { "type": "boolean" },
+        "notifyWeeklyReport": { "type": "boolean" },
+        "lastNotifiedDate": { "type": "string" },
+        "blockedDates": { "type": "array", "description": "Unavailable ISO dates (yyyy-MM-dd)." },
+        "seededInitialCatalog": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "userId", "displayName", "classLevel", "syllabusVersion",
+        "defaultIntervals", "dailyRevisionCapacity", "preferredStudyTime",
+        "darkModePreference", "notificationsEnabled", "notifyTodayQueue",
+        "notifyOverdue", "notifyTests", "notifyWeakTopics", "notifyWeeklyReport",
+        "blockedDates", "seededInitialCatalog", "createdAt", "updatedAt"
+      ]
+    },
+    "Chapter": {
+      "title": "Chapter",
+      "description": "Subject chapter profile with spaced repetition state, notes, and evidence metrics.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "subject": { "type": "string", "enum": ["PHYSICS", "CHEMISTRY", "MATHEMATICS"] },
+        "section": { "type": "string", "enum": ["", "PHYSICAL", "INORGANIC", "ORGANIC"] },
+        "classLevel": { "type": "string", "enum": ["CLASS_11", "CLASS_12"] },
+        "orderIndex": { "type": "integer" },
+        "isArchived": { "type": "boolean" },
+        "syllabusVersion": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["NOT_STARTED", "CURRENTLY_STUDYING", "THEORY_COMPLETED", "PRACTICE_IN_PROGRESS", "REVISION_IN_PROGRESS", "STRONG", "NEEDS_ATTENTION"]
+        },
+        "initialLearningDate": { "type": "string" },
+        "completedRevisions": { "type": "integer" },
+        "lastRevisionDate": { "type": "string" },
+        "nextRevisionDate": { "type": "string" },
+        "originalDueDate": { "type": "string" },
+        "currentIntervalDays": { "type": "integer" },
+        "consecutiveSuccesses": { "type": "integer" },
+        "understandingRating": { "type": "number" },
+        "problemSolvingRating": { "type": "number" },
+        "confidenceRating": { "type": "number" },
+        "difficultyRating": { "type": "number" },
+        "totalQuestions": { "type": "integer" },
+        "correctQuestions": { "type": "integer" },
+        "incorrectQuestions": { "type": "integer" },
+        "unsolvedQuestions": { "type": "integer" },
+        "estimatedRetention": { "type": "number" },
+        "importance": { "type": "integer" },
+        "lastRescheduleReason": { "type": "string" },
+        "personalNotes": { "type": "string" },
+        "importantFormulas": { "type": "string" },
+        "commonMistakes": { "type": "string" },
+        "difficultQuestions": { "type": "string" },
+        "skipReason": { "type": "string" },
+        "skippedUntilDate": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "name", "subject", "section", "classLevel", "orderIndex", "isArchived",
+        "syllabusVersion", "status", "initialLearningDate", "completedRevisions",
+        "lastRevisionDate", "nextRevisionDate", "originalDueDate", "currentIntervalDays",
+        "consecutiveSuccesses", "understandingRating", "problemSolvingRating",
+        "confidenceRating", "difficultyRating", "totalQuestions", "correctQuestions",
+        "incorrectQuestions", "unsolvedQuestions", "estimatedRetention", "importance",
+        "lastRescheduleReason", "personalNotes", "importantFormulas", "commonMistakes",
+        "difficultQuestions", "skipReason", "skippedUntilDate", "createdAt", "updatedAt"
+      ]
+    },
+    "Topic": {
+      "title": "Topic",
+      "description": "Independent topic-level tracking within a chapter.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "subject": { "type": "string", "enum": ["PHYSICS", "CHEMISTRY", "MATHEMATICS"] },
+        "name": { "type": "string" },
+        "orderIndex": { "type": "integer" },
+        "isArchived": { "type": "boolean" },
+        "status": {
+          "type": "string",
+          "enum": ["NOT_STARTED", "CURRENTLY_STUDYING", "THEORY_COMPLETED", "PRACTICE_IN_PROGRESS", "REVISION_IN_PROGRESS", "STRONG", "NEEDS_ATTENTION"]
+        },
+        "initialLearningDate": { "type": "string" },
+        "completedRevisions": { "type": "integer" },
+        "lastRevisionDate": { "type": "string" },
+        "nextRevisionDate": { "type": "string" },
+        "originalDueDate": { "type": "string" },
+        "currentIntervalDays": { "type": "integer" },
+        "consecutiveSuccesses": { "type": "integer" },
+        "understandingRating": { "type": "number" },
+        "confidenceRating": { "type": "number" },
+        "difficultyRating": { "type": "number" },
+        "totalQuestions": { "type": "integer" },
+        "correctQuestions": { "type": "integer" },
+        "incorrectQuestions": { "type": "integer" },
+        "unsolvedQuestions": { "type": "integer" },
+        "estimatedRetention": { "type": "number" },
+        "lastOutcome": { "type": "string", "enum": ["", "EASY", "GOOD", "DIFFICULT", "FORGOT"] },
+        "lastRescheduleReason": { "type": "string" },
+        "notes": { "type": "string" },
+        "skipReason": { "type": "string" },
+        "skippedUntilDate": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "chapterId", "subject", "name", "orderIndex", "isArchived", "status",
+        "initialLearningDate", "completedRevisions", "lastRevisionDate", "nextRevisionDate",
+        "originalDueDate", "currentIntervalDays", "consecutiveSuccesses", "understandingRating",
+        "confidenceRating", "difficultyRating", "totalQuestions", "correctQuestions",
+        "incorrectQuestions", "unsolvedQuestions", "estimatedRetention", "lastOutcome",
+        "lastRescheduleReason", "notes", "skipReason", "skippedUntilDate", "createdAt", "updatedAt"
+      ]
+    },
+    "RevisionSession": {
+      "title": "RevisionSession",
+      "description": "Immutable completed 5-step revision session history record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "chapterName": { "type": "string" },
+        "topicId": { "type": "string" },
+        "topicName": { "type": "string" },
+        "subject": { "type": "string", "enum": ["PHYSICS", "CHEMISTRY", "MATHEMATICS"] },
+        "sessionDate": { "type": "string" },
+        "durationMinutes": { "type": "integer" },
+        "activeRecallNotes": { "type": "string" },
+        "theoryChecklist": { "type": "string" },
+        "questionsAttempted": { "type": "integer" },
+        "questionsCorrect": { "type": "integer" },
+        "questionsIncorrect": { "type": "integer" },
+        "questionsWithHints": { "type": "integer" },
+        "questionsUnsolved": { "type": "integer" },
+        "whatForgot": { "type": "string" },
+        "unclearConcept": { "type": "string" },
+        "mistakeMade": { "type": "string" },
+        "needsPractice": { "type": "string" },
+        "understandingRating": { "type": "integer" },
+        "confidenceRating": { "type": "integer" },
+        "difficultyRating": { "type": "integer" },
+        "outcome": { "type": "string", "enum": ["EASY", "GOOD", "DIFFICULT", "FORGOT"] },
+        "previousIntervalDays": { "type": "integer" },
+        "newIntervalDays": { "type": "integer" },
+        "nextRevisionDate": { "type": "string" },
+        "rescheduleExplanation": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "chapterId", "chapterName", "topicId", "topicName", "subject",
+        "sessionDate", "durationMinutes", "activeRecallNotes", "theoryChecklist",
+        "questionsAttempted", "questionsCorrect", "questionsIncorrect",
+        "questionsWithHints", "questionsUnsolved", "whatForgot", "unclearConcept",
+        "mistakeMade", "needsPractice", "understandingRating", "confidenceRating",
+        "difficultyRating", "outcome", "previousIntervalDays", "newIntervalDays",
+        "nextRevisionDate", "rescheduleExplanation", "createdAt", "updatedAt"
+      ]
+    },
+    "CalendarEvent": {
+      "title": "CalendarEvent",
+      "description": "ALLEN test dates, study targets, and custom revision calendar entries.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "eventType": { "type": "string", "enum": ["ALLEN_TEST", "STUDY_TARGET", "CUSTOM_REVISION"] },
+        "subject": { "type": "string", "enum": ["ALL", "PHYSICS", "CHEMISTRY", "MATHEMATICS"] },
+        "date": { "type": "string" },
+        "timeSlot": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "notes": { "type": "string" },
+        "isCompleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "title", "eventType", "subject", "date", "timeSlot",
+        "chapterId", "notes", "isCompleted", "createdAt", "updatedAt"
+      ]
+    },
+    "TestRecord": {
+      "title": "TestRecord",
+      "description": "Test analysis record with subject marks and chapter-wise performance.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "testName": { "type": "string" },
+        "testDate": { "type": "string" },
+        "testType": { "type": "string", "enum": ["ALLEN_MINOR", "ALLEN_MAJOR", "JEE_MAIN_MOCK", "JEE_ADV_MOCK", "CHAPTER_TEST", "CUSTOM"] },
+        "physicsScore": { "type": "number" },
+        "physicsMax": { "type": "number" },
+        "chemistryScore": { "type": "number" },
+        "chemistryMax": { "type": "number" },
+        "mathsScore": { "type": "number" },
+        "mathsMax": { "type": "number" },
+        "totalMarks": { "type": "number" },
+        "maxMarks": { "type": "number" },
+        "accuracyPercent": { "type": "number" },
+        "timeManagementNotes": { "type": "string" },
+        "chapterResults": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "testName", "testDate", "testType", "physicsScore", "physicsMax",
+        "chemistryScore", "chemistryMax", "mathsScore", "mathsMax", "totalMarks",
+        "maxMarks", "accuracyPercent", "timeManagementNotes", "chapterResults",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "ErrorRecord": {
+      "title": "ErrorRecord",
+      "description": "Searchable error notebook entry linked to subject, chapter, and topic.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "subject": { "type": "string", "enum": ["PHYSICS", "CHEMISTRY", "MATHEMATICS"] },
+        "chapterId": { "type": "string" },
+        "chapterName": { "type": "string" },
+        "topicId": { "type": "string" },
+        "topicName": { "type": "string" },
+        "questionRef": { "type": "string" },
+        "errorCategory": { "type": "string", "enum": ["CONCEPTUAL", "APPLICATION", "CALCULATION", "QUESTION_READING", "TIME_MANAGEMENT"] },
+        "mistakeExplanation": { "type": "string" },
+        "correctApproach": { "type": "string" },
+        "importantLesson": { "type": "string" },
+        "dateRecorded": { "type": "string" },
+        "reattemptStatus": { "type": "string", "enum": ["PENDING", "SCHEDULED", "SOLVED_CORRECTLY", "NEEDS_REVIEW"] },
+        "scheduledRevisionDate": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "subject", "chapterId", "chapterName", "topicId", "topicName",
+        "questionRef", "errorCategory", "mistakeExplanation", "correctApproach",
+        "importantLesson", "dateRecorded", "reattemptStatus", "scheduledRevisionDate",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "FormulaNote": {
+      "title": "FormulaNote",
+      "description": "Short note, formula, derivation, reaction, or trick in the Formula Bank.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "subject": { "type": "string", "enum": ["PHYSICS", "CHEMISTRY", "MATHEMATICS"] },
+        "chapterId": { "type": "string" },
+        "chapterName": { "type": "string" },
+        "noteType": { "type": "string", "enum": ["FORMULA", "DERIVATION", "REACTION", "EXCEPTION", "CONCEPT", "TRICK", "EXAMPLE"] },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "latexFormula": { "type": "string" },
+        "attachmentUri": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "subject", "chapterId", "chapterName", "noteType", "title",
+        "content", "latexFormula", "attachmentUri", "createdAt", "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile and revision preferences."
+    },
+    "/users/{userId}/chapters/{chapterId}": {
+      "schema": { "$ref": "#/entities/Chapter" },
+      "description": "Subject chapters with spaced-repetition state and personal study notes."
+    },
+    "/users/{userId}/topics/{topicId}": {
+      "schema": { "$ref": "#/entities/Topic" },
+      "description": "Granular topic-level tracking inside chapters."
+    },
+    "/users/{userId}/revision_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/RevisionSession" },
+      "description": "Append-only 5-step revision session history."
+    },
+    "/users/{userId}/calendar_events/{eventId}": {
+      "schema": { "$ref": "#/entities/CalendarEvent" },
+      "description": "ALLEN tests, personal targets, and custom revision events."
+    },
+    "/users/{userId}/test_records/{testId}": {
+      "schema": { "$ref": "#/entities/TestRecord" },
+      "description": "Mock and coaching test scores with chapter-wise performance."
+    },
+    "/users/{userId}/error_records/{errorId}": {
+      "schema": { "$ref": "#/entities/ErrorRecord" },
+      "description": "Searchable error notebook entries."
+    },
+    "/users/{userId}/formula_notes/{noteId}": {
+      "schema": { "$ref": "#/entities/FormulaNote" },
+      "description": "Subject-wise short notes, formulas, derivations, and reactions."
+    }
+  }
+}
